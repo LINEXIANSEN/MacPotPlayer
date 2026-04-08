@@ -78,6 +78,11 @@ jobs:
             SWIFT_INCLUDE_PATHS="$(brew --prefix)/include" \
             OTHER_LDFLAGS="-lavcodec -lavformat -lavutil -lswscale -lswresample -lass -lpthread" \
             2>&1 | tee build.log
+          
+          # 输出构建产物位置
+          echo "=== Build Products ==="
+          ls -la MacPotPlayer.build/
+          find . -name "*.app" -type d 2>/dev/null
 
       # ── 7. Upload build log on failure ───────────────────────────
       - name: Upload build log
@@ -88,28 +93,51 @@ jobs:
           path: build.log
           retention-days: 7
 
-      # ── 8. Upload .app as artifact ───────────────────────────────
-      - name: Upload .app artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: MacPotPlayer-Release
-          path: build/Release/MacPotPlayer.app
-          retention-days: 7
+      # ── 8. Find and show all .app files ──────────────────────────
+      - name: Find .app files
+        id: find_app
+        run: |
+          echo "=== Searching for .app files ==="
+          find . -name "*.app" -type d 2>/dev/null || true
+          echo "=== Searching in common locations ==="
+          ls -la build/Release/ 2>/dev/null || echo "No build/Release/"
+          ls -la MacPotPlayer.build/ 2>/dev/null || echo "No MacPotPlayer.build/"
+          ls -la build/ 2>/dev/null || echo "No build/"
 
       # ── 9. Locate built .app ──────────────────────────────────────
       - name: Locate built app
         id: locate
         run: |
-          APP_PATH=$(find . -name "MacPotPlayer.app" -type d | head -1)
-          if [ -z "$APP_PATH" ]; then
-            echo "ERROR: MacPotPlayer.app not found after build"
-            exit 1
-          fi
-          echo "Found app at: $APP_PATH"
-          echo "APP_PATH=$APP_PATH" >> $GITHUB_OUTPUT
+          # 尝试多个可能的路径
+          POSSIBLE_PATHS=(
+            "build/Release/MacPotPlayer.app"
+            "MacPotPlayer.build/Release/MacPotPlayer.app"
+            "$(find . -name 'MacPotPlayer.app' -type d 2>/dev/null | head -1)"
+          )
+          
+          for APP_PATH in "${POSSIBLE_PATHS[@]}"; do
+            if [ -n "$APP_PATH" ] && [ -d "$APP_PATH" ]; then
+              echo "Found app at: $APP_PATH"
+              echo "APP_PATH=$APP_PATH" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          done
+          
+          echo "ERROR: MacPotPlayer.app not found!"
+          echo "=== Debug: List all files ==="
+          ls -laR . | head -100
+          exit 1
 
-      # ── 10. Create DMG ────────────────────────────────────────────
+      # ── 10. Upload .app as artifact ───────────────────────────────
+      - name: Upload .app artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacPotPlayer-Release
+          path: "${{ steps.locate.outputs.APP_PATH }}"
+          retention-days: 7
+
+      # ── 11. Create DMG ────────────────────────────────────────────
       - name: Create DMG
         run: |
           APP_PATH="${{ steps.locate.outputs.APP_PATH }}"
@@ -126,7 +154,7 @@ jobs:
           mv "/tmp/${FINAL_DMG}" "./${FINAL_DMG}"
           ls -lh "${FINAL_DMG}"
 
-      # ── 11. Create GitHub Release ─────────────────────────────────
+      # ── 12. Create GitHub Release ─────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         if: success()
