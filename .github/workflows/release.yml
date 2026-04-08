@@ -62,8 +62,8 @@ jobs:
           xcodegen generate
           ls -la *.xcodeproj || echo "Xcode project not found!"
 
-      # ── 6. Debug: List workspace before build ───────────────────
-      - name: Debug: List workspace
+      # ── 6. Debug list workspace ─────────────────────────────────
+      - name: Debug list workspace
         run: |
           echo "=== Current directory ==="
           pwd
@@ -76,7 +76,7 @@ jobs:
         id: build
         run: |
           set -o pipefail
-          
+
           echo "=== Starting build ==="
           xcodebuild \
             -project MacPotPlayer.xcodeproj \
@@ -93,21 +93,21 @@ jobs:
             SWIFT_INCLUDE_PATHS="$(brew --prefix)/include" \
             OTHER_LDFLAGS="-lavcodec -lavformat -lavutil -lswscale -lswresample -lass -lpthread" \
             2>&1 | tee build.log
-          
+
           BUILD_STATUS=${PIPESTATUS[0]}
           echo "=== Build exit status: $BUILD_STATUS ==="
-          
+
           if [ $BUILD_STATUS -ne 0 ]; then
             echo "BUILD FAILED with exit code $BUILD_STATUS"
             echo "=== Last 100 lines of build.log ==="
             tail -100 build.log
             exit 1
           fi
-          
+
           echo "BUILD SUCCEEDED"
 
-      # ── 8. Debug: List build output ──────────────────────────────
-      - name: Debug: List build output
+      # ── 8. Debug list build output ──────────────────────────────
+      - name: Debug list build output
         run: |
           echo "=== Build directory structure ==="
           find build/ -type f -name "*.app" 2>/dev/null
@@ -131,7 +131,7 @@ jobs:
 
           if [ -z "$APP_PATH" ]; then
             echo "ERROR: MacPotPlayer.app not found!"
-            echo "=== Debug: Check common locations ==="
+            echo "=== Debug check common locations ==="
             ls -la build/Build/Products/Release/ 2>/dev/null || echo "No Release folder"
             ls -la build/Build/Products/Debug/ 2>/dev/null || echo "No Debug folder"
             ls -la build/ 2>/dev/null || echo "No build folder"

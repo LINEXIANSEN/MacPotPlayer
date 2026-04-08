@@ -66,7 +66,7 @@ jobs:
             2>&1 | tee build.log
 
       # ── 6. Find and show built .app ──────────────────────────────
-      - name: Find built app
+      - name: Find built app debug
         run: |
           echo "=== Searching for .app files ==="
           find . -name "*.app" -type d 2>/dev/null
