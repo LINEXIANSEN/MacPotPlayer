@@ -14,7 +14,6 @@ env:
   DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
   MACOSX_DEPLOYMENT_TARGET: "14.0"
   XCODE_VERSION: "15.3"
-  SPM_CACHE_DIR: ~/Library/Caches/org.swift.swiftpm
 
 jobs:
   build:
@@ -24,12 +23,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runs-on: macos-14        # Apple Silicon
+          - runs-on: macos-14
             xcode: "15.3"
-            ffmpeg_prefix: /opt/homebrew/opt/ffmpeg
-          - runs-on: macos-13        # Intel
+          - runs-on: macos-13
             xcode: "15.3"
-            ffmpeg_prefix: /usr/local/opt/ffmpeg
 
     steps:
       # ── 1. Checkout ──────────────────────────────────────────────
@@ -42,38 +39,24 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app && xcodebuild -version
 
-      # ── 3. Install system dependencies ────────────────────────────
+      # ── 3. Install dependencies ─────────────────────────────────
       - name: Install dependencies
         run: |
-          # Install XcodeGen if not present
-          if ! command -v xcodegen &> /dev/null; then
-            brew install xcodegen
-          fi
-
-          # Install FFmpeg (static bottle)
-          if ! brew list ffmpeg &> /dev/null; then
-            brew install ffmpeg
-          fi
-
-          # Install pkg-config
-          if ! command -v pkg-config &> /dev/null; then
-            brew install pkg-config
-          fi
-
+          brew install xcodegen
+          brew install ffmpeg
+          brew install pkg-config
+          brew install libass
           xcodegen --version
-          ffmpeg -version | head -1
-          echo "FFmpeg prefix: ${{ matrix.ffmpeg_prefix }}"
-          ls "${{ matrix.ffmpeg_prefix }}/lib/" | grep -E "libav(codec|format|util|swscale|swresample)"
+          echo "=== FFmpeg ==="
+          ls /opt/homebrew/include/ 2>/dev/null | head -5 || ls /usr/local/include/ 2>/dev/null | head -5
+          echo "=== libass ==="
+          ls /opt/homebrew/include/ass/ 2>/dev/null || ls /usr/local/include/ass/ 2>/dev/null
 
-      # ── 4. Generate .xcodeproj ───────────────────────────────────
+      # ── 4. Generate Xcode project ────────────────────────────────
       - name: Generate Xcode project
         run: xcodegen generate
 
-      # ── 5. Resolve Swift packages ─────────────────────────────────
-      - name: Resolve packages
-        run: xcodebuild -project MacPotPlayer.xcodeproj -scheme MacPotPlayer -configuration Debug -resolvePackageDependencies
-
-      # ── 6. Build ─────────────────────────────────────────────────
+      # ── 5. Build ─────────────────────────────────────────────────
       - name: Build
         run: |
           xcodebuild \
@@ -85,13 +68,23 @@ jobs:
             CODE_SIGN_IDENTITY=- \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            HEADER_SEARCH_PATHS="${{ matrix.ffmpeg_prefix }}/include" \
-            LIBRARY_SEARCH_PATHS="${{ matrix.ffmpeg_prefix }}/lib" \
-            SWIFT_INCLUDE_PATHS="${{ matrix.ffmpeg_prefix }}/include" \
-            2>&1
+            HEADER_SEARCH_PATHS="$(brew --prefix)/include" \
+            LIBRARY_SEARCH_PATHS="$(brew --prefix)/lib" \
+            SWIFT_INCLUDE_PATHS="$(brew --prefix)/include" \
+            2>&1 | tee build.log
+
+      # ── 6. Upload build log on failure ───────────────────────────
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ matrix.runs-on }}
+          path: build.log
+          retention-days: 7
 
       # ── 7. Upload .app as artifact ───────────────────────────────
       - name: Upload build artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: MacPotPlayer-Build-${{ matrix.runs-on == 'macos-14' && 'AppleSilicon' || 'Intel' }}

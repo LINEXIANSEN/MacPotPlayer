@@ -30,8 +30,6 @@
     <string>NSApplication</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.video</string>
-
-    <!-- 支持的文件类型 -->
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>
@@ -43,14 +41,29 @@
             <string>Alternate</string>
             <key>CFBundleTypeExtensions</key>
             <array>
-                <string>mp4</string><string>mkv</string><string>avi</string>
-                <string>mov</string><string>wmv</string><string>flv</string>
-                <string>webm</string><string>m4v</string><string>ts</string>
-                <string>m2ts</string><string>mts</string><string>mpg</string>
-                <string>mpeg</string><string>vob</string><string>ogv</string>
-                <string>3gp</string><string>rmvb</string><string>rm</string>
-                <string>hevc</string><string>h264</string><string>h265</string>
-                <string>av1</string><string>f4v</string>
+                <string>mp4</string>
+                <string>mkv</string>
+                <string>avi</string>
+                <string>mov</string>
+                <string>wmv</string>
+                <string>flv</string>
+                <string>webm</string>
+                <string>m4v</string>
+                <string>ts</string>
+                <string>m2ts</string>
+                <string>mts</string>
+                <string>mpg</string>
+                <string>mpeg</string>
+                <string>vob</string>
+                <string>ogv</string>
+                <string>3gp</string>
+                <string>rmvb</string>
+                <string>rm</string>
+                <string>hevc</string>
+                <string>h264</string>
+                <string>h265</string>
+                <string>av1</string>
+                <string>f4v</string>
             </array>
         </dict>
         <dict>
@@ -62,15 +75,20 @@
             <string>Alternate</string>
             <key>CFBundleTypeExtensions</key>
             <array>
-                <string>mp3</string><string>aac</string><string>flac</string>
-                <string>wav</string><string>ogg</string><string>opus</string>
-                <string>wma</string><string>m4a</string><string>aiff</string>
-                <string>alac</string><string>ape</string>
+                <string>mp3</string>
+                <string>aac</string>
+                <string>flac</string>
+                <string>wav</string>
+                <string>ogg</string>
+                <string>opus</string>
+                <string>wma</string>
+                <string>m4a</string>
+                <string>aiff</string>
+                <string>alac</string>
+                <string>ape</string>
             </array>
         </dict>
     </array>
-
-    <!-- URL Scheme：支持 macpotplayer:// 协议 -->
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
@@ -82,23 +100,13 @@
             </array>
         </dict>
     </array>
-
-    <!-- 权限描述 -->
     <key>NSDocumentsFolderUsageDescription</key>
     <string>MacPotPlayer 需要访问文档以打开媒体文件</string>
     <key>NSDownloadsFolderUsageDescription</key>
     <string>MacPotPlayer 需要访问下载文件夹以打开媒体文件</string>
     <key>NSDesktopFolderUsageDescription</key>
     <string>MacPotPlayer 需要访问桌面以打开媒体文件</string>
-
-    <!-- 通知 -->
     <key>NSUserNotificationsUsageDescription</key>
     <string>MacPotPlayer 用通知告知截图已保存</string>
-
-    <!-- 主 NIB / SwiftUI -->
-    <key>NSMainStoryboardFile</key>
-    <string></string>
-    <key>NSPrincipalClass</key>
-    <string>NSApplication</string>
 </dict>
 </plist>

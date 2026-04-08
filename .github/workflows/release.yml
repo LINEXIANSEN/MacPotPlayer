@@ -12,12 +12,11 @@ permissions:
 env:
   MACOSX_DEPLOYMENT_TARGET: "14.0"
   XCODE_VERSION: "15.3"
-  PRODUCT_BUNDLE_IDENTIFIER: com.macpotplayer.app
 
 jobs:
   release:
     name: Release Build & Package
-    runs-on: macos-14  # Apple Silicon for faster builds
+    runs-on: macos-14
 
     steps:
       # ── 1. Checkout ──────────────────────────────────────────────
@@ -32,7 +31,6 @@ jobs:
           VERSION=${TAG#v}
           echo "RELEASE_VERSION=$VERSION" >> $GITHUB_ENV
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "Tag: $TAG  Version: $VERSION"
 
       # ── 2. Select Xcode ──────────────────────────────────────────
       - name: Select Xcode
@@ -43,30 +41,19 @@ jobs:
       # ── 3. Install dependencies ──────────────────────────────────
       - name: Install dependencies
         run: |
-          # XcodeGen
-          if ! command -v xcodegen &> /dev/null; then
-            brew install xcodegen
-          fi
-
-          # FFmpeg
-          if ! brew list ffmpeg &> /dev/null; then
-            brew install ffmpeg
-          fi
-
-          # pkg-config
-          if ! command -v pkg-config &> /dev/null; then
-            brew install pkg-config
-          fi
-
-          echo "FFmpeg installed at: /opt/homebrew/opt/ffmpeg"
-          ls /opt/homebrew/opt/ffmpeg/lib/ | grep -E "libav"
+          brew install xcodegen
+          brew install ffmpeg
+          brew install pkg-config
+          brew install libass
+          echo "=== Dependencies installed ==="
+          brew list ffmpeg && echo "FFmpeg: OK"
+          brew list libass && echo "libass: OK"
 
       # ── 4. Patch Info.plist with version ─────────────────────────
       - name: Patch version in Info.plist
         run: |
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Resources/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion 1" Resources/Info.plist
-          echo "Info.plist patched: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
 
       # ── 5. Generate Xcode project ────────────────────────────────
       - name: Generate Xcode project
@@ -86,13 +73,22 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             MACOSX_DEPLOYMENT_TARGET=14.0 \
-            HEADER_SEARCH_PATHS="/opt/homebrew/opt/ffmpeg/include" \
-            LIBRARY_SEARCH_PATHS="/opt/homebrew/opt/ffmpeg/lib" \
-            SWIFT_INCLUDE_PATHS="/opt/homebrew/opt/ffmpeg/include" \
-            OTHER_LDFLAGS="-lavcodec -lavformat -lavutil -lswscale -lswresample -lpthread" \
-            2>&1
+            HEADER_SEARCH_PATHS="$(brew --prefix)/include" \
+            LIBRARY_SEARCH_PATHS="$(brew --prefix)/lib" \
+            SWIFT_INCLUDE_PATHS="$(brew --prefix)/include" \
+            OTHER_LDFLAGS="-lavcodec -lavformat -lavutil -lswscale -lswresample -lass -lpthread" \
+            2>&1 | tee build.log
 
-      # ── 7. Locate built .app ──────────────────────────────────────
+      # ── 7. Upload build log on failure ───────────────────────────
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-build-log
+          path: build.log
+          retention-days: 7
+
+      # ── 8. Locate built .app ──────────────────────────────────────
       - name: Locate built app
         id: locate
         run: |
@@ -103,35 +99,25 @@ jobs:
           fi
           echo "Found app at: $APP_PATH"
           echo "APP_PATH=$APP_PATH" >> $GITHUB_OUTPUT
-          ls -la "$APP_PATH/Contents/MacOS/" || echo "No MacOS directory"
 
-      # ── 8. Create DMG ────────────────────────────────────────────
+      # ── 9. Create DMG ────────────────────────────────────────────
       - name: Create DMG
         run: |
           APP_PATH="${{ steps.locate.outputs.APP_PATH }}"
           VERSION="${{ env.VERSION }}"
-          TEMP_DMG="/tmp/MacPotPlayer_${VERSION}_unsigned.dmg"
           FINAL_DMG="MacPotPlayer_${VERSION}_macOS.dmg"
 
-          echo "Creating DMG for app: $APP_PATH"
-
-          # Simple DMG using hdiutil
           hdiutil create \
             -volname "MacPotPlayer ${VERSION}" \
             -srcfolder "$APP_PATH" \
             -ov \
             -format UDZO \
-            "$TEMP_DMG"
+            "/tmp/${FINAL_DMG}"
 
-          if [ -f "$TEMP_DMG" ]; then
-            mv "$TEMP_DMG" "$FINAL_DMG"
-            ls -lh "$FINAL_DMG"
-          else
-            echo "ERROR: DMG creation failed"
-            exit 1
-          fi
+          mv "/tmp/${FINAL_DMG}" "./${FINAL_DMG}"
+          ls -lh "${FINAL_DMG}"
 
-      # ── 9. Create GitHub Release ─────────────────────────────────
+      # ── 10. Create GitHub Release ─────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         if: success()
@@ -139,26 +125,25 @@ jobs:
           draft: false
           prerelease: ${{ contains(github.ref, '-') }}
           files: |
-            *.dmg
+            MacPotPlayer_*.dmg
           body: |
             ## MacPotPlayer ${{ env.VERSION }} 🎬
 
             A native macOS video player inspired by PotPlayer.
 
-            ### What's New
+            ### Features
             - 360° VR Video Support
             - FFmpeg-powered decoding with hardware acceleration
             - Advanced subtitle rendering (SRT, ASS/SSA, VTT)
             - 10-band audio equalizer
-            - Screenshot and burst capture
+            - Screenshot capture
 
             ### Installation
             1. Download the `.dmg` file below
-            2. Open it and drag **MacPotPlayer** to your Applications folder
-            3. On first launch, right-click → **Open** to bypass Gatekeeper
+            2. Open and drag **MacPotPlayer** to Applications
+            3. On first launch, right-click → **Open**
 
-            ### System Requirements
+            ### Requirements
             - macOS 14.0 (Sonoma) or later
-            - Apple Silicon or Intel Mac
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
