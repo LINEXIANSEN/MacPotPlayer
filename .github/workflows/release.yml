@@ -46,9 +46,9 @@ jobs:
           brew install ffmpeg
           brew install libass
           echo "=== FFmpeg ==="
-          ls $(brew --prefix)/include/libavcodec/
+          ls $(brew --prefix)/include/libavcodec/ || echo "FFmpeg headers not found!"
           echo "=== libass ==="
-          ls $(brew --prefix)/include/ass/
+          ls $(brew --prefix)/include/ass/ || echo "libass headers not found!"
 
       # ── 4. Patch Info.plist with version ─────────────────────────
       - name: Patch version in Info.plist
@@ -58,12 +58,26 @@ jobs:
 
       # ── 5. Generate Xcode project ────────────────────────────────
       - name: Generate Xcode project
-        run: xcodegen generate
+        run: |
+          xcodegen generate
+          ls -la *.xcodeproj || echo "Xcode project not found!"
 
-      # ── 6. Build Release ─────────────────────────────────────────
+      # ── 6. Debug: List workspace before build ───────────────────
+      - name: Debug: List workspace
+        run: |
+          echo "=== Current directory ==="
+          pwd
+          ls -la
+          echo "=== Resources directory ==="
+          ls -la Resources/
+
+      # ── 7. Build Release ─────────────────────────────────────────
       - name: Build Release
         id: build
         run: |
+          set -o pipefail
+          
+          echo "=== Starting build ==="
           xcodebuild \
             -project MacPotPlayer.xcodeproj \
             -scheme MacPotPlayer \
@@ -79,8 +93,27 @@ jobs:
             SWIFT_INCLUDE_PATHS="$(brew --prefix)/include" \
             OTHER_LDFLAGS="-lavcodec -lavformat -lavutil -lswscale -lswresample -lass -lpthread" \
             2>&1 | tee build.log
+          
+          BUILD_STATUS=${PIPESTATUS[0]}
+          echo "=== Build exit status: $BUILD_STATUS ==="
+          
+          if [ $BUILD_STATUS -ne 0 ]; then
+            echo "BUILD FAILED with exit code $BUILD_STATUS"
+            echo "=== Last 100 lines of build.log ==="
+            tail -100 build.log
+            exit 1
+          fi
+          
+          echo "BUILD SUCCEEDED"
 
-      # ── 7. Upload build log on failure ───────────────────────────
+      # ── 8. Debug: List build output ──────────────────────────────
+      - name: Debug: List build output
+        run: |
+          echo "=== Build directory structure ==="
+          find build/ -type f -name "*.app" 2>/dev/null
+          ls -laR build/ 2>/dev/null | head -100
+
+      # ── 9. Upload build log on failure ───────────────────────────
       - name: Upload build log
         if: failure()
         uses: actions/upload-artifact@v4
@@ -89,24 +122,26 @@ jobs:
           path: build.log
           retention-days: 7
 
-      # ── 8. Find and locate .app ──────────────────────────────────
+      # ── 10. Find and locate .app ─────────────────────────────────
       - name: Find and locate .app
         id: locate
         run: |
           echo "=== Searching for .app files ==="
           APP_PATH=$(find . -name "MacPotPlayer.app" -type d 2>/dev/null | head -1)
-          
+
           if [ -z "$APP_PATH" ]; then
             echo "ERROR: MacPotPlayer.app not found!"
-            echo "=== Debug: List build directory ==="
-            ls -laR build/ 2>/dev/null | head -50
+            echo "=== Debug: Check common locations ==="
+            ls -la build/Build/Products/Release/ 2>/dev/null || echo "No Release folder"
+            ls -la build/Build/Products/Debug/ 2>/dev/null || echo "No Debug folder"
+            ls -la build/ 2>/dev/null || echo "No build folder"
             exit 1
           fi
-          
+
           echo "Found app at: $APP_PATH"
           echo "APP_PATH=$APP_PATH" >> $GITHUB_OUTPUT
 
-      # ── 9. Upload .app as artifact ───────────────────────────────
+      # ── 11. Upload .app as artifact ───────────────────────────────
       - name: Upload .app artifact
         if: success()
         uses: actions/upload-artifact@v4
@@ -115,7 +150,7 @@ jobs:
           path: "${{ steps.locate.outputs.APP_PATH }}"
           retention-days: 7
 
-      # ── 10. Create DMG ────────────────────────────────────────────
+      # ── 12. Create DMG ────────────────────────────────────────────
       - name: Create DMG
         run: |
           APP_PATH="${{ steps.locate.outputs.APP_PATH }}"
@@ -124,7 +159,7 @@ jobs:
 
           echo "Creating DMG from: $APP_PATH"
           ls -la "$APP_PATH"
-          
+
           hdiutil create \
             -volname "MacPotPlayer ${VERSION}" \
             -srcfolder "$APP_PATH" \
@@ -135,7 +170,7 @@ jobs:
           mv "/tmp/${FINAL_DMG}" "./${FINAL_DMG}"
           ls -lh "${FINAL_DMG}"
 
-      # ── 11. Create GitHub Release ─────────────────────────────────
+      # ── 13. Create GitHub Release ─────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         if: success()
