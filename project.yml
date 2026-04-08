@@ -18,8 +18,6 @@ settings:
     ENABLE_HARDENED_RUNTIME: YES
     COMBINE_HIDPI_IMAGES: YES
     SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/Bridging/MacPotPlayer-Bridging-Header.h"
-    HEADER_SEARCH_PATHS: "$(SRCROOT)/FFmpeg/include"
-    LIBRARY_SEARCH_PATHS: "$(SRCROOT)/FFmpeg/lib"
     SWIFT_OBJC_INTERFACE_HEADER_NAME: "MacPotPlayer-Swift.h"
     CLANG_ENABLE_MODULES: YES
 
@@ -58,29 +56,8 @@ targets:
       - sdk: SwiftUI.framework
       - sdk: UniformTypeIdentifiers.framework
       - sdk: CoreServices.framework
-      - framework: "FFmpeg/lib/libavcodec.framework"
-        embed: false
-      - framework: "FFmpeg/lib/libavformat.framework"
-        embed: false
-      - framework: "FFmpeg/lib/libavutil.framework"
-        embed: false
-      - framework: "FFmpeg/lib/libswscale.framework"
-        embed: false
-      - framework: "FFmpeg/lib/libswresample.framework"
-        embed: false
-      - framework: "FFmpeg/lib/libass.framework"
-        embed: false
-
-  MacPotPlayerTests:
-    type: bundle.unit-test
-    platform: macOS
-    sources:
-      - path: SourcesTests
-    dependencies:
-      - target: MacPotPlayer
-    settings:
-      base:
-        INFOPLIST_FILE: SourcesTests/Info.plist
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
 
 schemes:
   MacPotPlayer:
@@ -89,10 +66,6 @@ schemes:
         MacPotPlayer: all
     run:
       config: Debug
-    test:
-      config: Debug
-      targets:
-        - MacPotPlayerTests
     profile:
       config: Release
     analyze:

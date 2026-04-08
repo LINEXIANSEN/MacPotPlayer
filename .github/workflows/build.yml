@@ -26,8 +26,10 @@ jobs:
         include:
           - runs-on: macos-14        # Apple Silicon
             xcode: "15.3"
-          # - runs-on: macos-13     # Intel (optional, uncomment if needed)
-          #   xcode: "15.3"
+            ffmpeg_prefix: /opt/homebrew/opt/ffmpeg
+          - runs-on: macos-13        # Intel
+            xcode: "15.3"
+            ffmpeg_prefix: /usr/local/opt/ffmpeg
 
     steps:
       # ── 1. Checkout ──────────────────────────────────────────────
@@ -40,17 +42,7 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app && xcodebuild -version
 
-      # ── 3. Cache Homebrew (optional speedup) ──────────────────────
-      - name: Cache Homebrew
-        uses: actions/cache@v4
-        if: runner.os == 'macOS'
-        with:
-          path: |
-            ~/Library/Caches/Homebrew
-            /usr/local/Cellar/xcodegen
-          key: brew-xcodegen-${{ runner.os }}
-
-      # ── 4. Install system dependencies ────────────────────────────
+      # ── 3. Install system dependencies ────────────────────────────
       - name: Install dependencies
         run: |
           # Install XcodeGen if not present
@@ -58,33 +50,30 @@ jobs:
             brew install xcodegen
           fi
 
-          # Install FFmpeg (static bottle, no library linking needed for SPM)
+          # Install FFmpeg (static bottle)
           if ! brew list ffmpeg &> /dev/null; then
             brew install ffmpeg
           fi
 
-          # Install pkg-config (needed for libass via SPM)
+          # Install pkg-config
           if ! command -v pkg-config &> /dev/null; then
             brew install pkg-config
           fi
 
-          # Install create-dmg for packaging
-          if ! brew list create-dmg &> /dev/null; then
-            brew install create-dmg
-          fi
-
           xcodegen --version
           ffmpeg -version | head -1
+          echo "FFmpeg prefix: ${{ matrix.ffmpeg_prefix }}"
+          ls "${{ matrix.ffmpeg_prefix }}/lib/" | grep -E "libav(codec|format|util|swscale|swresample)"
 
-      # ── 5. Generate .xcodeproj ───────────────────────────────────
+      # ── 4. Generate .xcodeproj ───────────────────────────────────
       - name: Generate Xcode project
         run: xcodegen generate
 
-      # ── 6. Resolve Swift packages ─────────────────────────────────
+      # ── 5. Resolve Swift packages ─────────────────────────────────
       - name: Resolve packages
         run: xcodebuild -project MacPotPlayer.xcodeproj -scheme MacPotPlayer -configuration Debug -resolvePackageDependencies
 
-      # ── 7. Build ─────────────────────────────────────────────────
+      # ── 6. Build ─────────────────────────────────────────────────
       - name: Build
         run: |
           xcodebuild \
@@ -96,9 +85,12 @@ jobs:
             CODE_SIGN_IDENTITY=- \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            HEADER_SEARCH_PATHS="${{ matrix.ffmpeg_prefix }}/include" \
+            LIBRARY_SEARCH_PATHS="${{ matrix.ffmpeg_prefix }}/lib" \
+            SWIFT_INCLUDE_PATHS="${{ matrix.ffmpeg_prefix }}/include" \
             2>&1
 
-      # ── 8. Upload .app as artifact ───────────────────────────────
+      # ── 7. Upload .app as artifact ───────────────────────────────
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
