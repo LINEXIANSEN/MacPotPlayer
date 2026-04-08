@@ -1,0 +1,107 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+  MACOSX_DEPLOYMENT_TARGET: "14.0"
+  XCODE_VERSION: "15.3"
+  SPM_CACHE_DIR: ~/Library/Caches/org.swift.swiftpm
+
+jobs:
+  build:
+    name: Build (Xcode ${{ matrix.xcode }})
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runs-on: macos-14        # Apple Silicon
+            xcode: "15.3"
+          # - runs-on: macos-13     # Intel (optional, uncomment if needed)
+          #   xcode: "15.3"
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ── 2. Select Xcode ──────────────────────────────────────────
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app && xcodebuild -version
+
+      # ── 3. Cache Homebrew (optional speedup) ──────────────────────
+      - name: Cache Homebrew
+        uses: actions/cache@v4
+        if: runner.os == 'macOS'
+        with:
+          path: |
+            ~/Library/Caches/Homebrew
+            /usr/local/Cellar/xcodegen
+          key: brew-xcodegen-${{ runner.os }}
+
+      # ── 4. Install system dependencies ────────────────────────────
+      - name: Install dependencies
+        run: |
+          # Install XcodeGen if not present
+          if ! command -v xcodegen &> /dev/null; then
+            brew install xcodegen
+          fi
+
+          # Install FFmpeg (static bottle, no library linking needed for SPM)
+          if ! brew list ffmpeg &> /dev/null; then
+            brew install ffmpeg
+          fi
+
+          # Install pkg-config (needed for libass via SPM)
+          if ! command -v pkg-config &> /dev/null; then
+            brew install pkg-config
+          fi
+
+          # Install create-dmg for packaging
+          if ! brew list create-dmg &> /dev/null; then
+            brew install create-dmg
+          fi
+
+          xcodegen --version
+          ffmpeg -version | head -1
+
+      # ── 5. Generate .xcodeproj ───────────────────────────────────
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # ── 6. Resolve Swift packages ─────────────────────────────────
+      - name: Resolve packages
+        run: xcodebuild -project MacPotPlayer.xcodeproj -scheme MacPotPlayer -configuration Debug -resolvePackageDependencies
+
+      # ── 7. Build ─────────────────────────────────────────────────
+      - name: Build
+        run: |
+          xcodebuild \
+            -project MacPotPlayer.xcodeproj \
+            -scheme MacPotPlayer \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            build \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1
+
+      # ── 8. Upload .app as artifact ───────────────────────────────
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacPotPlayer-Build-${{ matrix.runs-on == 'macos-14' && 'AppleSilicon' || 'Intel' }}
+          path: build/Debug/MacPotPlayer.app
+          retention-days: 7

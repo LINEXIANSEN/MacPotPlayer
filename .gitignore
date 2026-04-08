@@ -1,0 +1,45 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+*.xcuserstate
+*.xcuserdatad/
+*.xcbkptlist
+*.moved-aside
+DerivedData/
+!project.yml
+
+# Build
+build/
+DerivedData/
+*.dmg
+*.pkg
+dist/
+
+# SPM
+Packages/
+.swiftpm/
+.spmsaved/
+
+# Homebrew / dependencies
+lib/
+include/
+Frameworks/
+
+# SwiftLint / formatting
+.swiftlint.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Misc
+*.log
+*.tmp

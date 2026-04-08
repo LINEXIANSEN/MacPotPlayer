@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 沙盒：关闭以允许访问任意文件 -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+    <!-- 文件读写 -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    <key>com.apple.security.files.downloads.read-write</key>
+    <true/>
+    <!-- 网络 -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <!-- 画中画 -->
+    <key>com.apple.security.avfoundation.allow-av-content-playback</key>
+    <true/>
+</dict>
+</plist>

@@ -1,0 +1,101 @@
+name: MacPotPlayer
+options:
+  bundleIdPrefix: com.macpotplayer
+  deploymentTarget:
+    macOS: "13.0"
+  xcodeVersion: "15.0"
+  generateEmptyDirectories: true
+  createIntermediateGroups: true
+
+settings:
+  base:
+    PRODUCT_NAME: MacPotPlayer
+    MARKETING_VERSION: 1.0.0
+    CURRENT_PROJECT_VERSION: 1
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: YES
+    COMBINE_HIDPI_IMAGES: YES
+    SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/Bridging/MacPotPlayer-Bridging-Header.h"
+    HEADER_SEARCH_PATHS: "$(SRCROOT)/FFmpeg/include"
+    LIBRARY_SEARCH_PATHS: "$(SRCROOT)/FFmpeg/lib"
+    SWIFT_OBJC_INTERFACE_HEADER_NAME: "MacPotPlayer-Swift.h"
+    CLANG_ENABLE_MODULES: YES
+
+targets:
+  MacPotPlayer:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+        excludes:
+          - "**/*.md"
+    resources:
+      - path: Resources
+    settings:
+      base:
+        INFOPLIST_FILE: Resources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.macpotplayer.app
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
+        SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/Bridging/MacPotPlayer-Bridging-Header.h"
+    entitlements:
+      path: Resources/MacPotPlayer.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.device.camera: false
+        com.apple.security.device.microphone: false
+    dependencies:
+      - sdk: AVFoundation.framework
+      - sdk: CoreGraphics.framework
+      - sdk: CoreAudio.framework
+      - sdk: CoreVideo.framework
+      - sdk: AudioToolbox.framework
+      - sdk: VideoToolbox.framework
+      - sdk: AppKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: UniformTypeIdentifiers.framework
+      - sdk: CoreServices.framework
+      - framework: "FFmpeg/lib/libavcodec.framework"
+        embed: false
+      - framework: "FFmpeg/lib/libavformat.framework"
+        embed: false
+      - framework: "FFmpeg/lib/libavutil.framework"
+        embed: false
+      - framework: "FFmpeg/lib/libswscale.framework"
+        embed: false
+      - framework: "FFmpeg/lib/libswresample.framework"
+        embed: false
+      - framework: "FFmpeg/lib/libass.framework"
+        embed: false
+
+  MacPotPlayerTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: SourcesTests
+    dependencies:
+      - target: MacPotPlayer
+    settings:
+      base:
+        INFOPLIST_FILE: SourcesTests/Info.plist
+
+schemes:
+  MacPotPlayer:
+    build:
+      targets:
+        MacPotPlayer: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MacPotPlayerTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

@@ -1,0 +1,193 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "v*.*.*-*"
+
+permissions:
+  contents: write
+
+env:
+  MACOSX_DEPLOYMENT_TARGET: "14.0"
+  XCODE_VERSION: "15.3"
+  PRODUCT_BUNDLE_IDENTIFIER: com.macpotplayer.app
+
+jobs:
+  release:
+    name: Release Build & Package
+    runs-on: macos-14  # Apple Silicon for faster builds
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Export version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG#v}
+          echo "RELEASE_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Tag: $TAG  Version: $VERSION"
+
+      # ── 2. Select Xcode ──────────────────────────────────────────
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
+          xcodebuild -version
+
+      # ── 3. Install dependencies ──────────────────────────────────
+      - name: Install dependencies
+        run: |
+          # XcodeGen
+          if ! command -v xcodegen &> /dev/null; then
+            brew install xcodegen
+          fi
+
+          # FFmpeg
+          if ! brew list ffmpeg &> /dev/null; then
+            brew install ffmpeg
+          fi
+
+          # pkg-config
+          if ! command -v pkg-config &> /dev/null; then
+            brew install pkg-config
+          fi
+
+          # create-dmg
+          if ! brew list create-dmg &> /dev/null; then
+            brew install create-dmg
+          fi
+
+          echo "All dependencies installed ✓"
+
+      # ── 4. Patch Info.plist with version ─────────────────────────
+      - name: Patch version in Info.plist
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Resources/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion 1" Resources/Info.plist
+          echo "Info.plist patched: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+
+      # ── 5. Generate Xcode project ────────────────────────────────
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # ── 6. Build Release ─────────────────────────────────────────
+      - name: Build Release
+        id: build
+        run: |
+          xcodebuild \
+            -project MacPotPlayer.xcodeproj \
+            -scheme MacPotPlayer \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            build \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            MACOSX_DEPLOYMENT_TARGET=14.0 \
+            2>&1
+
+      # ── 7. Locate built .app ──────────────────────────────────────
+      - name: Locate built app
+        id: locate
+        run: |
+          APP_PATH=$(find . -name "MacPotPlayer.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: MacPotPlayer.app not found after build"
+            exit 1
+          fi
+          echo "Found app at: $APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_OUTPUT
+          ls -la "$APP_PATH/Contents/MacOS/"
+
+      # ── 8. Create DMG ────────────────────────────────────────────
+      - name: Create DMG
+        run: |
+          SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+          APP_PATH="${{ steps.locate.outputs.APP_PATH }}"
+          VERSION="${{ env.VERSION }}"
+          TEMP_DMG="/tmp/MacPotPlayer_${VERSION}_unsigned.dmg"
+          FINAL_DMG="MacPotPlayer_${VERSION}_macOS.dmg"
+
+          echo "Creating DMG for app: $APP_PATH"
+
+          # Use create-dmg
+          create-dmg \
+            --volname "MacPotPlayer ${VERSION}" \
+            --volicon "Resources/AppIcon.icns" \
+            --window-pos 200 120 \
+            --window-size 660 400 \
+            --icon-size 100 \
+            --app-drop-link 480 170 \
+            --hide-extension "MacPotPlayer.app" \
+            --codesign‐disable \
+            "$TEMP_DMG" \
+            "$APP_PATH" || true
+
+          # Fallback: simple hdiutil if create-dmg fails
+          if [ ! -f "$TEMP_DMG" ]; then
+            echo "create-dmg failed, using hdiutil fallback..."
+            hdiutil create \
+              -volname "MacPotPlayer ${VERSION}" \
+              -srcfolder "$APP_PATH" \
+              -ov \
+              -format UDZO \
+              "$TEMP_DMG" || true
+          fi
+
+          if [ -f "$TEMP_DMG" ]; then
+            mv "$TEMP_DMG" "$FINAL_DMG"
+            ls -lh "$FINAL_DMG"
+          else
+            echo "WARNING: DMG creation failed. Uploading .app instead."
+            cp -R "$APP_PATH" "MacPotPlayer.app"
+          fi
+
+      # ── 9. Create GitHub Release ─────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: success()
+        with:
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') }}
+          files: |
+            *.dmg
+            MacPotPlayer.app
+          body: |
+            ## MacPotPlayer ${{ env.VERSION }} 🎬
+
+            A native macOS video player inspired by PotPlayer.
+
+            ### What's New
+            - 360° VR Video Support
+            - FFmpeg-powered decoding with hardware acceleration
+            - Advanced subtitle rendering (SRT, ASS/SSA, VTT)
+            - 10-band audio equalizer
+            - Screenshot and burst capture
+
+            ### Installation
+            1. Download the `.dmg` file below
+            2. Open it and drag **MacPotPlayer** to your Applications folder
+            3. On first launch, right-click → **Open** to bypass Gatekeeper
+
+            ### System Requirements
+            - macOS 14.0 (Sonoma) or later
+            - Apple Silicon or Intel Mac
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 10. Upload dmg as release asset ──────────────────────────
+      - name: Upload DMG to Release
+        uses: softprops/action-gh-release@v1
+        if: success()
+        with:
+          files: |
+            MacPotPlayer_*.dmg
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
