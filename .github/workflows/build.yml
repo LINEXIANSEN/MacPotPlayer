@@ -54,6 +54,7 @@ jobs:
             -scheme MacPotPlayer \
             -configuration Debug \
             -destination 'platform=macOS' \
+            -derivedDataPath build \
             build \
             CODE_SIGN_IDENTITY=- \
             CODE_SIGNING_REQUIRED=NO \
@@ -64,7 +65,16 @@ jobs:
             OTHER_LDFLAGS="-lavcodec -lavformat -lavutil -lswscale -lswresample -lass -lpthread" \
             2>&1 | tee build.log
 
-      # ── 6. Upload build log on failure ───────────────────────────
+      # ── 6. Find and show built .app ──────────────────────────────
+      - name: Find built app
+        run: |
+          echo "=== Searching for .app files ==="
+          find . -name "*.app" -type d 2>/dev/null
+          echo "=== Build directory contents ==="
+          ls -la build/ 2>/dev/null || echo "No build/"
+          ls -la build/Build/Products/ 2>/dev/null || echo "No build/Build/Products/"
+
+      # ── 7. Upload build log on failure ───────────────────────────
       - name: Upload build log
         if: failure()
         uses: actions/upload-artifact@v4
@@ -73,11 +83,11 @@ jobs:
           path: build.log
           retention-days: 7
 
-      # ── 7. Upload .app as artifact ───────────────────────────────
+      # ── 8. Upload .app as artifact ───────────────────────────────
       - name: Upload build artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: MacPotPlayer-Build
-          path: build/Debug/MacPotPlayer.app
+          path: build/Build/Products/Debug/MacPotPlayer.app
           retention-days: 7
