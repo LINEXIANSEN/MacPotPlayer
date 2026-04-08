@@ -89,44 +89,42 @@ jobs:
           path: build.log
           retention-days: 7
 
-      # ── 8. Find and show built .app ──────────────────────────────
-      - name: Find built app
-        run: |
-          echo "=== Searching for .app files ==="
-          find . -name "*.app" -type d 2>/dev/null
-          echo "=== Build directory contents ==="
-          ls -la build/ 2>/dev/null || echo "No build/"
-          ls -la build/Build/Products/ 2>/dev/null || echo "No build/Build/Products/"
-
-      # ── 9. Locate built .app ──────────────────────────────────────
-      - name: Locate built app
+      # ── 8. Find and locate .app ──────────────────────────────────
+      - name: Find and locate .app
         id: locate
         run: |
-          APP_PATH="build/Build/Products/Release/MacPotPlayer.app"
-          if [ -d "$APP_PATH" ]; then
-            echo "Found app at: $APP_PATH"
-            echo "APP_PATH=$APP_PATH" >> $GITHUB_OUTPUT
-          else
-            echo "ERROR: MacPotPlayer.app not found at $APP_PATH"
+          echo "=== Searching for .app files ==="
+          APP_PATH=$(find . -name "MacPotPlayer.app" -type d 2>/dev/null | head -1)
+          
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: MacPotPlayer.app not found!"
+            echo "=== Debug: List build directory ==="
+            ls -laR build/ 2>/dev/null | head -50
             exit 1
           fi
+          
+          echo "Found app at: $APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_OUTPUT
 
-      # ── 10. Upload .app as artifact ───────────────────────────────
+      # ── 9. Upload .app as artifact ───────────────────────────────
       - name: Upload .app artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: MacPotPlayer-Release
-          path: build/Build/Products/Release/MacPotPlayer.app
+          path: "${{ steps.locate.outputs.APP_PATH }}"
           retention-days: 7
 
-      # ── 11. Create DMG ────────────────────────────────────────────
+      # ── 10. Create DMG ────────────────────────────────────────────
       - name: Create DMG
         run: |
           APP_PATH="${{ steps.locate.outputs.APP_PATH }}"
           VERSION="${{ env.VERSION }}"
           FINAL_DMG="MacPotPlayer_${VERSION}_macOS.dmg"
 
+          echo "Creating DMG from: $APP_PATH"
+          ls -la "$APP_PATH"
+          
           hdiutil create \
             -volname "MacPotPlayer ${VERSION}" \
             -srcfolder "$APP_PATH" \
@@ -137,7 +135,7 @@ jobs:
           mv "/tmp/${FINAL_DMG}" "./${FINAL_DMG}"
           ls -lh "${FINAL_DMG}"
 
-      # ── 12. Create GitHub Release ─────────────────────────────────
+      # ── 11. Create GitHub Release ─────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         if: success()
