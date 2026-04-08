@@ -10,6 +10,7 @@ permissions:
   contents: write
 
 env:
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
   MACOSX_DEPLOYMENT_TARGET: "14.0"
   XCODE_VERSION: "15.3"
 
@@ -35,7 +36,7 @@ jobs:
       # ── 2. Select Xcode ──────────────────────────────────────────
       - name: Select Xcode
         run: |
-          sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
+          sudo xcode-select -s /Applications/Xcode_15.3.app
           xcodebuild -version
 
       # ── 3. Install dependencies ──────────────────────────────────
@@ -43,11 +44,11 @@ jobs:
         run: |
           brew install xcodegen
           brew install ffmpeg
-          brew install pkg-config
           brew install libass
-          echo "=== Dependencies installed ==="
-          brew list ffmpeg && echo "FFmpeg: OK"
-          brew list libass && echo "libass: OK"
+          echo "=== FFmpeg ==="
+          ls $(brew --prefix)/include/libavcodec/
+          echo "=== libass ==="
+          ls $(brew --prefix)/include/ass/
 
       # ── 4. Patch Info.plist with version ─────────────────────────
       - name: Patch version in Info.plist
@@ -72,7 +73,6 @@ jobs:
             CODE_SIGN_IDENTITY=- \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            MACOSX_DEPLOYMENT_TARGET=14.0 \
             HEADER_SEARCH_PATHS="$(brew --prefix)/include" \
             LIBRARY_SEARCH_PATHS="$(brew --prefix)/lib" \
             SWIFT_INCLUDE_PATHS="$(brew --prefix)/include" \
@@ -88,7 +88,16 @@ jobs:
           path: build.log
           retention-days: 7
 
-      # ── 8. Locate built .app ──────────────────────────────────────
+      # ── 8. Upload .app as artifact ───────────────────────────────
+      - name: Upload .app artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacPotPlayer-Release
+          path: build/Release/MacPotPlayer.app
+          retention-days: 7
+
+      # ── 9. Locate built .app ──────────────────────────────────────
       - name: Locate built app
         id: locate
         run: |
@@ -100,7 +109,7 @@ jobs:
           echo "Found app at: $APP_PATH"
           echo "APP_PATH=$APP_PATH" >> $GITHUB_OUTPUT
 
-      # ── 9. Create DMG ────────────────────────────────────────────
+      # ── 10. Create DMG ────────────────────────────────────────────
       - name: Create DMG
         run: |
           APP_PATH="${{ steps.locate.outputs.APP_PATH }}"
@@ -117,7 +126,7 @@ jobs:
           mv "/tmp/${FINAL_DMG}" "./${FINAL_DMG}"
           ls -lh "${FINAL_DMG}"
 
-      # ── 10. Create GitHub Release ─────────────────────────────────
+      # ── 11. Create GitHub Release ─────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         if: success()
