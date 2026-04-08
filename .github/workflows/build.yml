@@ -17,16 +17,8 @@ env:
 
 jobs:
   build:
-    name: Build (Xcode ${{ matrix.xcode }})
-    runs-on: ${{ matrix.runs-on }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runs-on: macos-14
-            xcode: "15.3"
-          - runs-on: macos-13
-            xcode: "15.3"
+    name: Build (Xcode 15.3)
+    runs-on: macos-14
 
     steps:
       # ── 1. Checkout ──────────────────────────────────────────────
@@ -37,20 +29,18 @@ jobs:
 
       # ── 2. Select Xcode ──────────────────────────────────────────
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app && xcodebuild -version
+        run: sudo xcode-select -s /Applications/Xcode_15.3.app && xcodebuild -version
 
       # ── 3. Install dependencies ─────────────────────────────────
       - name: Install dependencies
         run: |
           brew install xcodegen
           brew install ffmpeg
-          brew install pkg-config
           brew install libass
-          xcodegen --version
           echo "=== FFmpeg ==="
-          ls /opt/homebrew/include/ 2>/dev/null | head -5 || ls /usr/local/include/ 2>/dev/null | head -5
+          ls $(brew --prefix)/include/libavcodec/
           echo "=== libass ==="
-          ls /opt/homebrew/include/ass/ 2>/dev/null || ls /usr/local/include/ass/ 2>/dev/null
+          ls $(brew --prefix)/include/ass/
 
       # ── 4. Generate Xcode project ────────────────────────────────
       - name: Generate Xcode project
@@ -71,6 +61,7 @@ jobs:
             HEADER_SEARCH_PATHS="$(brew --prefix)/include" \
             LIBRARY_SEARCH_PATHS="$(brew --prefix)/lib" \
             SWIFT_INCLUDE_PATHS="$(brew --prefix)/include" \
+            OTHER_LDFLAGS="-lavcodec -lavformat -lavutil -lswscale -lswresample -lass -lpthread" \
             2>&1 | tee build.log
 
       # ── 6. Upload build log on failure ───────────────────────────
@@ -78,7 +69,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log-${{ matrix.runs-on }}
+          name: build-log
           path: build.log
           retention-days: 7
 
@@ -87,6 +78,6 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: MacPotPlayer-Build-${{ matrix.runs-on == 'macos-14' && 'AppleSilicon' || 'Intel' }}
+          name: MacPotPlayer-Build
           path: build/Debug/MacPotPlayer.app
           retention-days: 7
